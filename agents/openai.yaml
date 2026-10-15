@@ -1,0 +1,4 @@
+interface:
+  display_name: "后端代码审查评分"
+  short_description: "基于证据审查后端代码并按 100 分制生成 HTML 评分报告"
+  default_prompt: "使用 $backend-code-review-score 审查当前后端修改，完成 100 分评分并使用内置模板生成 HTML 报告，完成后仅返回报告绝对路径。"

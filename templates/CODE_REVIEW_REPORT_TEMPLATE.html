@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:,">
+  <title>后端代码审查报告 - {{reportTitle}} - {{reviewResult}}</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #fff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d9e1ea;
+      --head: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Microsoft YaHei', 'PingFang SC', Arial, sans-serif;
+    }
+
+    body.status-pass {
+      background: linear-gradient(180deg, #eef8f1 0, #f8fafc 180px, var(--bg) 100%);
+    }
+
+    body.status-change {
+      background: linear-gradient(180deg, #edf5ff 0, #f8fafc 180px, var(--bg) 100%);
+    }
+
+    body.status-fail,
+    body.status-high-risk {
+      background: linear-gradient(180deg, #fef2f2 0, #f8fafc 180px, var(--bg) 100%);
+    }
+
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 18px 18px 40px;
+    }
+
+    .title {
+      padding: 20px 22px;
+      border-radius: 16px;
+      background: linear-gradient(90deg, #2563eb, #38bdf8);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(15,23,42,.14);
+    }
+
+    .title.score-excellent {
+      background: linear-gradient(90deg, #15803d, #22c55e);
+    }
+
+    .title.score-good {
+      background: linear-gradient(90deg, #2563eb, #38bdf8);
+    }
+
+    .title.score-warning {
+      background: linear-gradient(90deg, #b45309, #f59e0b);
+    }
+
+    .title.score-fail {
+      background: linear-gradient(90deg, #b91c1c, #f43f5e);
+    }
+
+    .title.score-high-risk {
+      background: linear-gradient(90deg, #7f1d1d, #b91c1c, #ef4444);
+    }
+
+    .title h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .title .sub {
+      font-size: 13px;
+      line-height: 1.7;
+      opacity: .92;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .card {
+      margin-top: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      box-shadow: 0 2px 8px rgba(15,23,42,.04);
+    }
+
+    .card h2,
+    .card h3 {
+      margin: 0 0 12px;
+      color: var(--head);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      text-align: left;
+      vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    th {
+      background: #f8fafc;
+    }
+
+    td {
+      max-width: 0;
+    }
+
+    .table-scroll {
+      max-height: 560px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      scrollbar-gutter: stable;
+    }
+
+    /* 滚动容器内表格改用 separate 边框模型，避免 collapse 模式下吸顶表头边框随内容滚走 */
+    .table-scroll table {
+      border: 0;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    .table-scroll th,
+    .table-scroll td {
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      font-size: 11px;
+    }
+
+    .table-scroll th:last-child,
+    .table-scroll td:last-child {
+      border-right: 0;
+    }
+
+    .table-scroll tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    /* 表头吸顶：表格在容器内部滚动时表头固定在顶部 */
+    .table-scroll thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #f8fafc;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      color: #fff;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .badge-blocker,
+    .badge-fail,
+    .badge-high-risk {
+      background: #b91c1c;
+    }
+
+    .badge-critical {
+      background: #dc2626;
+    }
+
+    .badge-major {
+      background: #d97706;
+    }
+
+    .badge-minor {
+      background: #0284c7;
+    }
+
+    .badge-info {
+      background: #2563eb;
+    }
+
+    .badge-pass {
+      background: #16a34a;
+    }
+
+    .mono {
+      font-family: Consolas, 'SFMono-Regular', Menlo, Monaco, monospace;
+      font-size: 12px;
+    }
+
+    /* 代码变更统计：新增为绿色、删除为红色，参考 Git 平台统计样式 */
+    .diff-add {
+      color: #16a34a;
+      font-weight: 600;
+    }
+
+    .diff-del {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    /* 人员账号、有效文件数等第二行辅助信息 */
+    .cell-sub {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    /* 审查概览涉及目录树 */
+    .dir-tree {
+      margin: 0;
+      padding: 10px 12px;
+      overflow: auto;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      font-family: Consolas, 'SFMono-Regular', Menlo, Monaco, monospace;
+      font-size: 12px;
+      line-height: 1.8;
+      white-space: pre;
+    }
+
+    .section-note,
+    .issue-summary,
+    .fix-tip {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .section-note {
+      margin: 8px 0 12px;
+    }
+
+    .issue-detail {
+      margin-bottom: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .issue-detail summary {
+      padding: 12px 14px;
+      background: #f8fafc;
+      cursor: pointer;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .issue-detail summary:focus-visible,
+    details.severity-guide > summary:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: -2px;
+    }
+
+    .issue-detail > div,
+    .issue-detail > pre {
+      margin: 0 14px 12px;
+    }
+
+    .issue-location {
+      padding: 10px 12px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+
+    .code-block {
+      padding: 12px 14px;
+      overflow: auto;
+      border-radius: 10px;
+      background: #0b1020;
+      color: #e5e7eb;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .kpi {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fafc;
+    }
+
+    .kpi .label {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .kpi .value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    /* 提交统计保留足够的列宽，移动端通过外层滚动容器查看完整内容。 */
+    .person-commit-table {
+      min-width: 720px;
+    }
+
+    details.severity-guide {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+
+    details.severity-guide > summary {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    details.severity-guide .table-scroll {
+      margin-top: 10px;
+      background: #fff;
+    }
+
+    /* 问题跟踪按信息密度分配列宽，模块目录获得更大的可读空间 */
+    .issue-tracking-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr) minmax(0, .9fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .issue-tracking-panel {
+      min-width: 0;
+    }
+
+    .issue-tracking-grid .table-scroll {
+      width: 100%;
+      height: auto;
+      max-height: 320px;
+      margin: 0;
+    }
+
+    .issue-tracking-grid th {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: keep-all;
+    }
+
+    .issue-tracking-grid td {
+      max-width: none;
+    }
+
+    .tracking-person-table th:nth-child(1) { width: 26%; }
+    .tracking-person-table th:nth-child(2) { width: 11%; }
+    .tracking-person-table th:nth-child(3) { width: 11%; }
+    .tracking-person-table th:nth-child(4) { width: 17%; }
+    .tracking-person-table th:nth-child(5) { width: 11%; }
+    .tracking-person-table th:nth-child(6) { width: 24%; }
+
+    .tracking-module-table th:nth-child(1) { width: 21%; }
+    .tracking-module-table th:nth-child(2) { width: 41%; }
+    .tracking-module-table th:nth-child(3) { width: 12%; }
+    .tracking-module-table th:nth-child(4) { width: 15%; }
+    .tracking-module-table th:nth-child(5) { width: 11%; }
+
+    .tracking-person-table td:first-child,
+    .tracking-module-table td:first-child {
+      white-space: nowrap;
+      overflow-wrap: normal;
+      word-break: keep-all;
+    }
+
+    /* 目录优先按路径边界自然换行，避免全局 anywhere 导致逐字符折行 */
+    .tracking-module-table td:nth-child(2) {
+      overflow-wrap: break-word;
+      word-break: normal;
+    }
+
+    .tracking-severity-table th:nth-child(1) { width: 26%; }
+    .tracking-severity-table th:nth-child(2) { width: 22%; }
+    .tracking-severity-table th:nth-child(3) { width: 30%; }
+    .tracking-severity-table th:nth-child(4) { width: 22%; }
+
+    .empty-row td {
+      max-width: none;
+      padding: 24px 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-state {
+      padding: 24px 12px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #f8fafc;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .footer-note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* 问题字段较多，保持表格最小宽度，避免移动端把操作列压缩到按钮无法显示。 */
+    .issue-table {
+      min-width: 1160px;
+    }
+
+    .issue-table th:nth-child(1) { width: 6%; }
+    .issue-table th:nth-child(2) { width: 7%; }
+    .issue-table th:nth-child(3) { width: 7%; }
+    .issue-table th:nth-child(4) { width: 9%; }
+    .issue-table th:nth-child(5) { width: 13%; }
+    .issue-table th:nth-child(6) { width: 15%; }
+    .issue-table th:nth-child(7) { width: 9%; }
+    .issue-table th:nth-child(8) { width: 22%; }
+    .issue-table th:nth-child(9) { width: 12%; }
+
+    .issue-table th:last-child {
+      text-align: left;
+    }
+
+    .issue-actions-cell {
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .issue-actions-cell .inline-actions {
+      display: flex;
+      width: 100%;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      gap: 4px;
+      margin-top: 0;
+    }
+
+    .issue-actions-cell .inline-action {
+      min-width: 0;
+      flex: 1 1 0;
+    }
+
+    .issue-summary-cell,
+    .issue-location-cell {
+      max-height: 120px;
+      overflow: auto;
+    }
+
+    @media (max-width: 1200px) {
+      .issue-tracking-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .issue-tracking-panel:last-child {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .wrap {
+        padding: 12px;
+      }
+
+      .title h1 {
+        font-size: 22px;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .issue-tracking-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .issue-tracking-panel:last-child {
+        grid-column: auto;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .tracking-person-table {
+        min-width: 620px;
+      }
+
+      .tracking-module-table {
+        min-width: 560px;
+      }
+
+    }
+
+    @media (max-width: 640px) {
+      .kpis {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 编辑能力放在问题清单表格下方，不改变报告正文的六章结构。 */
+    .issue-list-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .report-action {
+      min-height: 32px;
+      padding: 6px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      color: #334155;
+      background: #fff;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .18s ease, background-color .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+
+    .report-action:hover,
+    .report-action:focus-visible {
+      border-color: #2563eb;
+      color: #1d4ed8;
+      background: #eff6ff;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, .12);
+    }
+
+    .report-action.primary {
+      border-color: #2563eb;
+      color: #fff;
+      background: #2563eb;
+    }
+
+    .report-action.primary:hover,
+    .report-action.primary:focus-visible {
+      border-color: #1d4ed8;
+      color: #fff;
+      background: #1d4ed8;
+    }
+
+    .report-action:disabled,
+    .report-action:disabled:hover {
+      border-color: #e2e8f0;
+      color: #94a3b8;
+      background: #f8fafc;
+      cursor: not-allowed;
+      opacity: .7;
+    }
+
+    .report-save-hint {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .inline-actions {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 5px;
+    }
+
+    .inline-action {
+      min-width: 42px;
+      min-height: 26px;
+      padding: 3px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      color: #475569;
+      background: #fff;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .18s ease, background-color .18s ease, color .18s ease;
+    }
+
+    .inline-action:hover,
+    .inline-action:focus-visible {
+      color: #1d4ed8;
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+
+    .inline-action.danger:hover,
+    .inline-action.danger:focus-visible {
+      color: #b91c1c;
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    .field-hint {
+      display: inline-block;
+      margin-left: 4px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 400;
+    }
+
+    /* 评分公式默认收起，鼠标悬停或键盘聚焦时显示，避免占用概览卡片空间。 */
+    .score-help {
+      position: relative;
+      display: inline-flex;
+      margin-left: 4px;
+      vertical-align: middle;
+      cursor: help;
+    }
+
+    .score-help-icon {
+      display: inline-flex;
+      width: 16px;
+      height: 16px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #94a3b8;
+      border-radius: 50%;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .score-help-tooltip {
+      position: absolute;
+      z-index: 8;
+      top: calc(100% + 8px);
+      left: 0;
+      display: none;
+      width: min(320px, calc(100vw - 48px));
+      padding: 10px 12px;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f8fafc;
+      background: #0f172a;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, .22);
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.55;
+      white-space: normal;
+    }
+
+    .score-help:hover .score-help-tooltip,
+    .score-help:focus-visible .score-help-tooltip {
+      display: block;
+    }
+
+    .score-help:focus-visible {
+      outline: 2px solid #2563eb;
+      outline-offset: 2px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      z-index: 30;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, .48);
+      touch-action: none;
+      overscroll-behavior: contain;
+    }
+
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(720px, 100%);
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, .28);
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: sticky;
+      z-index: 2;
+      top: 0;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .96);
+    }
+
+    .modal-header h2 {
+      margin: 0;
+      color: var(--head);
+      font-size: 16px;
+    }
+
+    .modal-body {
+      padding: 16px;
+    }
+
+    .modal-intro {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 14px;
+      padding: 10px 12px;
+      border-left: 3px solid #2563eb;
+      border-radius: 6px;
+      background: #eff6ff;
+    }
+
+    .modal-intro strong {
+      color: #1e3a8a;
+      font-size: 13px;
+    }
+
+    .modal-intro span {
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .modal-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .modal-field {
+      display: grid;
+      gap: 5px;
+    }
+
+    .modal-field.full {
+      grid-column: 1 / -1;
+    }
+
+    .modal-field label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .modal-field input:not([type='checkbox']),
+    .modal-field select,
+    .modal-field textarea {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--text);
+      background: #fff;
+      font: inherit;
+    }
+
+    .modal-field input:not([type='checkbox']):focus-visible,
+    .modal-field select:focus-visible,
+    .modal-field textarea:focus-visible {
+      border-color: #2563eb;
+      outline: 2px solid rgba(37, 99, 235, .28);
+      outline-offset: 1px;
+    }
+
+    .modal-field input[readonly],
+    .modal-field textarea[readonly] {
+      color: #64748b;
+      background: #f8fafc;
+      cursor: default;
+    }
+
+    .checkbox-field {
+      display: block;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafc;
+    }
+
+    .checkbox-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: auto;
+      color: var(--text) !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      cursor: pointer;
+    }
+
+    .checkbox-control input[type='checkbox'] {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      padding: 0;
+      accent-color: #2563eb;
+      cursor: pointer;
+    }
+
+    .modal-field textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .modal-button {
+      min-height: 32px;
+      padding: 6px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      color: #475569;
+      background: #fff;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color .18s ease, background-color .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+
+    .modal-button:hover,
+    .modal-button:focus-visible {
+      border-color: #93c5fd;
+      color: #1d4ed8;
+      background: #eff6ff;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, .12);
+    }
+
+    .modal-button.primary {
+      border-color: #2563eb;
+      color: #fff;
+      background: #2563eb;
+    }
+
+    .modal-button.primary:hover,
+    .modal-button.primary:focus-visible {
+      border-color: #1d4ed8;
+      color: #fff;
+      background: #1d4ed8;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 40;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(420px, calc(100vw - 36px));
+      padding: 10px 13px;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      color: #166534;
+      background: #f0fdf4;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .toast.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    body.modal-open {
+      overflow: hidden;
+    }
+
+    @media print {
+      body,
+      body.status-pass,
+      body.status-change,
+      body.status-fail,
+      body.status-high-risk {
+        background: #fff !important;
+      }
+
+      .wrap {
+        max-width: none;
+        padding: 0;
+        gap: 10px;
+      }
+
+      .title,
+      .card,
+      .kpi,
+      .issue-detail {
+        box-shadow: none;
+      }
+
+      .title {
+        border: 1px solid var(--line);
+        color: var(--head);
+        background: #fff !important;
+      }
+
+      .title .sub {
+        opacity: 1;
+      }
+
+      .table-scroll {
+        max-height: none;
+        overflow: visible;
+        border: 0;
+      }
+
+      .table-scroll thead th {
+        position: static;
+      }
+
+      .issue-table,
+      .person-commit-table,
+      .tracking-person-table,
+      .tracking-module-table {
+        min-width: 0;
+      }
+
+      .issue-table th:last-child,
+      .issue-actions-cell,
+      .issue-list-actions,
+      .modal-backdrop,
+      .toast {
+        display: none !important;
+      }
+
+      .issue-detail,
+      details.severity-guide {
+        break-inside: avoid;
+      }
+
+      details.severity-guide:not([open]) > .table-scroll {
+        display: block;
+      }
+
+      details.severity-guide > summary {
+        display: none;
+      }
+
+      .code-block {
+        overflow: visible;
+      }
+
+      .title,
+      .badge {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .modal-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-field.full {
+        grid-column: auto;
+      }
+    }
+  </style>
+</head>
+<body class="{{reportStatusClass}}">
+  <div class="wrap">
+    <header class="title {{scoreBandClass}}">
+      <h1 id="reportHeaderTitle">后端代码审查报告 - {{reportTitle}}｜{{reviewResult}}</h1>
+      <div class="sub" id="reportHeaderMeta">
+        审查范围：{{reviewScope}}<br>
+        审查对象：{{reviewTarget}}<br>
+        审查类型：{{reviewType}} ｜ 生成时间：{{generatedAt}} ｜ 审查人：{{reviewer}}<br>
+        结论：{{reviewConclusion}}
+      </div>
+    </header>
+
+    <!-- S 审查概览 -->
+    <section class="card">
+      <h2>一、审查概览</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="label">得分 <span class="score-help" tabindex="0" aria-label="查看得分计算方式"><span class="score-help-icon" aria-hidden="true">?</span><span class="score-help-tooltip" role="tooltip">{{scoreFormula}}</span></span></div><div class="value" id="scoreValue">{{score}}</div></div>
+        <div class="kpi"><div class="label">问题数量</div><div class="value" id="issueCountValue">{{issueCount}}</div></div>
+        <div class="kpi"><div class="label">必须修复</div><div class="value" id="mustFixCountValue">{{mustFixCount}}</div></div>
+        <div class="kpi"><div class="label">提交数</div><div class="value" id="commitCountValue">{{commitCount}}</div></div>
+        <div class="kpi"><div class="label">涉及人员</div><div class="value" id="authorCountValue">{{authorCount}}</div></div>
+        <div class="kpi"><div class="label">AI 编码率 <span class="field-hint">仅展示，不扣分</span></div><div class="value" id="aiCodingRateValue">{{aiCodingRate}}</div></div>
+      </div>
+      <table style="margin-top: 12px;">
+        <tbody>
+          <tr><th style="width: 16%;">分支 / 基线</th><td class="mono" id="branchInfoValue">{{branchInfo}}</td><th style="width: 16%;">Commit 范围</th><td class="mono" id="commitRangeValue">{{commitRange}}</td></tr>
+          <tr><th>时间范围</th><td id="timeRangeValue">{{timeRange}}</td><th>涉及人员</th><td id="reviewAuthorsValue">{{reviewAuthors}}</td></tr>
+          <!-- reviewDirectories 必须填充仓库相对目录的紧凑文本树，使用 ├─、└─、│ 表达层级，不得填充逗号分隔、JSON 数组或平铺路径列表。 -->
+          <tr>
+            <th>涉及目录</th>
+            <td colspan="3">
+              <pre class="dir-tree" id="reviewDirectoriesValue" role="region" aria-label="本次审查涉及目录树" tabindex="0">{{reviewDirectories}}</pre>
+            </td>
+          </tr>
+          <tr><th>审查依据</th><td colspan="3" id="reviewBasisValue">{{reviewBasis}}</td></tr>
+          <tr><th>AI 编码率说明</th><td colspan="3" id="codingRateBasisValue">{{codingRateBasis}}</td></tr>
+        </tbody>
+      </table>
+    </section>
+    <!-- E 审查概览 -->
+
+    <!-- S 提交日志 -->
+    <section class="card">
+      <h2>二、提交日志</h2>
+      <!-- personCommitRowsHtml 展示按人员汇总的代码变更统计、代码总量占比、AI 编码率。代码变更统计合并为一个单元格展示，第一行展示新增 / 删除行数，第二行展示有效文件数量。代码总量占比 = 当前人员实际分析代码量 / 本次扫描实际分析代码量。AI 编码率必须通过本次 Git 有效变更代码的固定特征估算，优先对比提交人历史代码风格，排除生成代码和机械变更；Git / 工具 AI 标识仅作为增强证据，不得因没有标识直接填 0。该比例表示代码呈现出的 AI 辅助编码特征，不是代码来源鉴定结果，也不参与质量扣分。 -->
+      <p class="section-note">本节按人员汇总提交数、代码变更统计、代码总量占比和 AI 编码率，不展开提交明细，也不统计接口变更数量。代码变更统计只计有效变更（排除生成文件、压缩产物、纯格式化、无业务影响的锁文件、无独立差异的合并提交和成对回滚的提交）；代码总量占比与 AI 编码率共用“实际分析代码量”分母，AI 编码率按固定代码特征估算并标注置信程度。两项统计均不参与质量评分。</p>
+      <h3>按人员提交统计</h3>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>人员</th><th>提交数</th><th>代码变更统计</th><th>代码总量占比</th><th>AI 编码率</th></tr></thead>
+          <tbody id="personCommitRows"><tr class="empty-row"><td colspan="5">暂无人员数据</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <!-- E 提交日志 -->
+
+    <!-- S 问题清单 -->
+    <section class="card">
+      <h2>三、问题清单</h2>
+      <details class="severity-guide">
+        <summary>问题等级说明（点击展开）</summary>
+        <div class="table-scroll">
+          <table class="person-commit-table">
+            <thead><tr><th>级别</th><th>单个问题扣分</th><th>必须修复</th><th>含义</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge badge-blocker">阻断</span></td><td>20-30 <span class="field-hint">按原始分计入</span></td><td>是</td><td>导致系统不可用、数据损坏、重大安全风险、合规阻断或无法上线</td></tr>
+              <tr><td><span class="badge badge-critical">严重</span></td><td>10-19 <span class="field-hint">按原始分计入</span></td><td>是</td><td>高概率线上故障、严重性能问题、权限绕过或核心业务错误</td></tr>
+              <tr><td><span class="badge badge-major">主要</span></td><td>5-9 <span class="field-hint">同人递减</span></td><td>视情况</td><td>明确影响功能正确性、维护性、扩展性或可测试性</td></tr>
+              <tr><td><span class="badge badge-minor">次要</span></td><td>1-4 <span class="field-hint">同人递减</span></td><td>否</td><td>局部可读性、边界处理或轻量规范问题</td></tr>
+              <tr><td><span class="badge badge-info">提示</span></td><td>0</td><td>否</td><td>不扣分建议、风格提示或可选优化</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+      <p class="section-note">问题代码片段属于审查证据，不受代码展示策略限制；展示前必须完成敏感信息脱敏。级别列只使用中文：阻断、严重、主要、次要、提示。每条已有问题可在编号处编辑或删除，删除后可用表格下方“撤销”恢复。</p>
+      <div class="table-scroll">
+        <table class="issue-table">
+          <thead>
+            <tr><th>编号</th><th>级别</th><th>扣分</th><th>人员</th><th>提交日志</th><th>代码位置</th><th>是否必须修复</th><th>问题摘要</th><th>操作</th></tr>
+          </thead>
+          <tbody id="issueRows"><tr class="empty-row"><td colspan="9">暂无已确认问题</td></tr></tbody>
+        </table>
+      </div>
+      <div class="issue-list-actions" aria-label="报告编辑与保存操作">
+        <span class="report-save-hint">编辑或删除问题后可撤销或保存；点击保存会生成包含最新 reviewDataJson 的新版 HTML 文件。</span>
+        <button class="report-action" id="undoButton" type="button" disabled>撤销</button>
+        <button class="report-action" id="saveButton" type="button" disabled>保存</button>
+      </div>
+    </section>
+    <!-- E 问题清单 -->
+
+    <!-- S 问题详情 -->
+    <section class="card">
+      <h2>四、问题详情与脱敏代码片段</h2>
+      <p class="section-note">所有已确认问题必须展示脱敏问题代码；标记为必须修复的问题必须同时提供精确位置和非空代码片段，不得只给文字说明或修复方向。</p>
+      <div id="issueDetails"><div class="empty-state">暂无已确认问题详情。</div></div>
+    </section>
+    <!-- E 问题详情 -->
+
+    <!-- S 问题跟踪 -->
+    <section class="card">
+      <h2>五、问题跟踪</h2>
+      <div class="issue-tracking-grid">
+        <div class="issue-tracking-panel">
+          <h3>按人员</h3>
+          <div class="table-scroll">
+            <table class="tracking-person-table">
+              <thead><tr><th>人员</th><th>提交数</th><th>问题数</th><th>必须修复</th><th>扣分</th><th>得分</th></tr></thead>
+              <tbody id="personStatsRows"><tr class="empty-row"><td colspan="6">暂无人员问题统计</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="issue-tracking-panel">
+          <h3>按模块 / 目录</h3>
+          <div class="table-scroll">
+            <table class="tracking-module-table">
+              <thead><tr><th>人员</th><th>模块 / 目录</th><th>问题数</th><th>必须修复</th><th>扣分</th></tr></thead>
+              <tbody id="moduleStatsRows"><tr class="empty-row"><td colspan="5">暂无模块统计</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="issue-tracking-panel">
+          <h3>按级别</h3>
+          <div class="table-scroll">
+            <table class="tracking-severity-table">
+              <thead><tr><th>级别</th><th>问题数</th><th>必须修复</th><th>扣分</th></tr></thead>
+              <tbody id="severityStatsRows"><tr><td><span class="badge badge-blocker">阻断</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge badge-critical">严重</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge badge-major">主要</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge badge-minor">次要</span></td><td>0</td><td>0</td><td>0</td></tr><tr><td><span class="badge badge-info">提示</span></td><td>0</td><td>0</td><td>0</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- E 问题跟踪 -->
+
+    <!-- S 结论与后续动作 -->
+    <section class="card">
+      <h2>六、结论与后续动作</h2>
+      <table>
+        <tbody>
+          <tr><th style="width: 18%;">是否阻断</th><td><span class="badge {{gateClass}}" id="gateResultValue">{{gateResult}}</span></td></tr>
+          <tr><th>阻断原因</th><td id="blockReasonValue">{{blockReason}}</td></tr>
+          <tr><th>必须修复项</th><td id="mustFixItemsValue">{{mustFixItems}}</td></tr>
+          <tr><th>建议优化项</th><td id="suggestionItemsValue">{{suggestionItems}}</td></tr>
+          <tr><th>复审要求</th><td id="recheckRequirementValue">{{recheckRequirement}}</td></tr>
+        </tbody>
+      </table>
+      <div class="footer-note">报告由后端代码审查流程自动生成，控制台仅输出报告文件路径与生成状态。</div>
+    </section>
+    <!-- E 结论与后续动作 -->
+  </div>
+
+  <div class="modal-backdrop" id="editorModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal">
+      <div class="modal-header"><h2 id="modalTitle">编辑问题</h2><button class="modal-button" id="closeModalButton" type="button">关闭</button></div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <!-- reviewDataJson 的 summary.codeType 固定为 backend，并包含整体及人员维度的 AI 估算方法、折算代码量、实际分析代码量、排除代码量、置信程度和判断依据。每个 persons[] 元素必须包含 issues 数组；问题项只包含 id、level、deduction、person、commit、location、mustFix、summary 八字段，无问题人员必须使用空数组。 -->
+  <script id="reviewDataJson" type="application/json" hidden>
+    {{reviewDataJson}}
+  </script>
+  <script>
+    (function () {
+      'use strict';
+
+      // 报告正文沿用原模板结构；首次加载可填充占位符，后续变更通过固定节点同步数据，不重排六章结构。
+      const wrap = document.querySelector('.wrap');
+      const templateMarkup = wrap.innerHTML;
+      const dataNode = document.getElementById('reviewDataJson');
+      const initialJson = dataNode.textContent.trim();
+      const SEVERITY_ORDER = ['blocker', 'critical', 'major', 'minor', 'info'];
+      const SEVERITY_META = {
+        blocker: { label: '阻断', className: 'badge-blocker', defaultDeduction: 20 },
+        critical: { label: '严重', className: 'badge-critical', defaultDeduction: 10 },
+        major: { label: '主要', className: 'badge-major', defaultDeduction: 5 },
+        minor: { label: '次要', className: 'badge-minor', defaultDeduction: 1 },
+        info: { label: '提示', className: 'badge-info', defaultDeduction: 0 }
+      };
+      const STACK_FACTORS = [1, .9, .8, .7, .6, .5];
+      const SCORE_FORMULA_HINT = '个人分 = 100 - 同人问题扣分（主要/次要递减）；多人团队原始分 = 贡献加权分 × 55% + 最低 20% 人员平均分 × 25% + 最低人员分 × 20%；阻断/严重时最终分封顶 60，任一人员低于 60 分时封顶 70。';
+      let data = parseJson(initialJson);
+      let history = [];
+      let toastTimer;
+      let modalPointerDownInside = false;
+      let modalReturnFocus = null;
+
+      function parseJson (value) {
+        const parsed = JSON.parse(value);
+        validateData(parsed);
+        return parsed;
+      }
+
+      function numberValue (value) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+
+      function round (value) {
+        return Math.round(value * 100) / 100;
+      }
+
+      function escapeHtml (value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function cloneData (value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function activeIssues () {
+        return Array.isArray(data.issues) ? data.issues.filter((issue) => issue.confirmed !== false) : [];
+      }
+
+      function createPersonIssueSnapshot (issue, person) {
+        const meta = SEVERITY_META[issue.severity] || SEVERITY_META.info;
+        return {
+          id: String(issue.id || ''),
+          level: meta.label,
+          deduction: numberValue(issue.deduction),
+          person: String(person.name || ''),
+          commit: String(issue.commit || ''),
+          location: String(issue.location || ''),
+          mustFix: Boolean(issue.mustFix),
+          summary: String(issue.summary || '')
+        };
+      }
+
+      // 同一人员的主要、次要问题按原始扣分降序递减；阻断和严重问题始终按原始分计入。
+      function calculatePerson (person) {
+        const issues = activeIssues().filter((issue) => issue.personId === person.id);
+        const orderedIssues = issues
+          .filter((issue) => issue.severity === 'major' || issue.severity === 'minor')
+          .sort((left, right) => numberValue(right.deduction) - numberValue(left.deduction));
+        const includedById = {};
+        let stackIndex = 0;
+        let includedDeduction = 0;
+
+        const orderedAllIssues = [
+          ...issues.filter((issue) => issue.severity === 'blocker' || issue.severity === 'critical'),
+          ...orderedIssues
+        ];
+        orderedAllIssues.forEach((issue) => {
+          let included = numberValue(issue.deduction);
+          if (issue.severity === 'major' || issue.severity === 'minor') {
+            const factor = STACK_FACTORS[Math.min(stackIndex, STACK_FACTORS.length - 1)];
+            included = numberValue(issue.deduction) * factor;
+            stackIndex += 1;
+          }
+          includedById[issue.id] = included;
+          includedDeduction += included;
+        });
+
+        return {
+          ...person,
+          issues,
+          includedById,
+          includedDeduction: round(includedDeduction),
+          score: Math.max(0, Math.round(100 - includedDeduction)),
+          issueCount: issues.length,
+          mustFixCount: issues.filter((issue) => issue.mustFix).length,
+          codeTotalRatio: 0,
+          aiCodingRate: numberValue(person.analyzedChangedLines) > 0
+            ? `${round(numberValue(person.aiEstimatedLines) / numberValue(person.analyzedChangedLines) * 100).toFixed(2)}%`
+            : '0.00%'
+        };
+      }
+
+      function calculateReport () {
+        const persons = data.persons.map(calculatePerson);
+        const issues = activeIssues();
+        const totalAnalyzedLines = persons.reduce((sum, person) => sum + numberValue(person.analyzedChangedLines), 0);
+        const totalAiLines = persons.reduce((sum, person) => sum + numberValue(person.aiEstimatedLines), 0);
+        persons.forEach((person) => {
+          person.codeTotalRatio = totalAnalyzedLines > 0
+            ? `${(numberValue(person.analyzedChangedLines) / totalAnalyzedLines * 100).toFixed(2)}%`
+            : '0.00%';
+        });
+
+        const totalWeight = persons.reduce((sum, person) => sum + Math.sqrt(Math.max(0, numberValue(person.analyzedChangedLines))), 0);
+        const weightedScore = totalWeight > 0
+          ? persons.reduce((sum, person) => sum + person.score * Math.sqrt(Math.max(0, numberValue(person.analyzedChangedLines))), 0) / totalWeight
+          : 0;
+        const tailCount = Math.max(1, Math.ceil(persons.length * .2));
+        const tailRisk = [...persons].sort((left, right) => left.score - right.score).slice(0, tailCount);
+        const tailScore = tailRisk.length ? tailRisk.reduce((sum, person) => sum + person.score, 0) / tailRisk.length : 0;
+        const minimumScore = persons.length ? Math.min(...persons.map((person) => person.score)) : 0;
+        const rawScore = persons.length > 1
+          ? Math.round(weightedScore * .55 + tailScore * .25 + minimumScore * .2)
+          : minimumScore;
+        const hasCriticalRisk = issues.some((issue) => issue.severity === 'blocker' || issue.severity === 'critical');
+        const hasLowScorePerson = persons.some((person) => person.score < 60);
+        const riskCap = hasCriticalRisk ? 60 : hasLowScorePerson ? 70 : 100;
+        const score = Math.max(0, Math.min(riskCap, rawScore));
+        const gateResult = hasCriticalRisk ? '阻断' : issues.some((issue) => issue.mustFix || issue.severity === 'major' || issue.severity === 'minor') ? '需修改' : '通过';
+        const status = hasCriticalRisk ? 'high-risk' : score < 60 ? 'fail' : gateResult === '需修改' ? 'change' : 'pass';
+        const commitCount = data.persons.reduce((sum, person) => sum + numberValue(person.commitCount), 0);
+
+        return {
+          persons,
+          issues,
+          score,
+          rawScore,
+          riskCap,
+          gateResult,
+          status,
+          commitCount,
+          totalAnalyzedLines,
+          totalAiLines,
+          aiCodingRate: totalAnalyzedLines > 0 ? `${round(totalAiLines / totalAnalyzedLines * 100).toFixed(2)}%` : '0.00%',
+          riskCapReasons: hasCriticalRisk
+            ? ['存在阻断或严重问题，风险分封顶为 60。']
+            : hasLowScorePerson ? ['存在人员得分低于 60，风险分封顶为 70。'] : []
+        };
+      }
+
+      function syncDerivedFields (derived) {
+        const summary = data.summary;
+        summary.totalScore = derived.score;
+        summary.finalRiskScore = derived.score;
+        summary.score = derived.score;
+        summary.issueCount = derived.issues.length;
+        summary.mustFixCount = derived.issues.filter((issue) => issue.mustFix).length;
+        summary.commitCount = derived.commitCount;
+        summary.authorCount = derived.persons.length;
+        summary.reviewAuthors = data.persons.map((person) => person.name).filter(Boolean).join('、') || '无';
+        summary.aiCodingRate = derived.aiCodingRate;
+        summary.reviewResult = derived.gateResult;
+        summary.reviewConclusion = derived.gateResult === '通过' ? '未发现需要修改的问题。' : derived.gateResult === '阻断' ? '存在阻断风险，修复后必须复审。' : '发现需要修改的问题，修复后复审。';
+        const evidenceMarker = '审查事实：';
+        const existingEvidence = typeof summary.reviewBasis === 'string' && summary.reviewBasis.includes(evidenceMarker)
+          ? ` ${summary.reviewBasis.slice(summary.reviewBasis.indexOf(evidenceMarker))}`
+          : '';
+        summary.reviewBasis = `基础分 100；当前确认问题 ${derived.issues.length} 个，原始计算分 ${derived.rawScore}，${derived.riskCap < 100 ? `因风险封顶最终分为 ${derived.score}` : `最终风险分为 ${derived.score}`}。主要和次要问题按同人递减规则计入，阻断和严重问题按原始分计入。${existingEvidence}`;
+        data.persons.forEach((person) => {
+          const calculated = derived.persons.find((item) => item.id === person.id);
+          if (!calculated) return;
+          person.score = calculated.score;
+          person.issues = calculated.issues.map((issue) => createPersonIssueSnapshot(issue, person));
+          person.issueCount = person.issues.length;
+          person.codeTotalRatio = calculated.codeTotalRatio;
+          person.aiCodingRate = calculated.aiCodingRate;
+          person.codeAmount = `+${numberValue(person.addedLines)} / -${numberValue(person.deletedLines)}\n有效文件 ${numberValue(person.effectiveFileCount)} 个`;
+        });
+        return derived;
+      }
+
+      function tokenValue (value, isHtml) {
+        return isHtml ? String(value == null ? '' : value) : escapeHtml(value);
+      }
+
+      function fillTemplate (tokens) {
+        return templateMarkup.replace(/{{([A-Za-z0-9_]+)}}/g, (match, key) => key.endsWith('Html') ? '' : tokenValue(tokens[key] == null ? '' : tokens[key], false));
+      }
+
+      function personById (id) {
+        return data.persons.find((person) => person.id === id) || { name: '未归属人员', email: '' };
+      }
+
+      function inlineActions (type, id) {
+        const safeId = escapeHtml(id);
+        return `<span class="inline-actions"><button class="inline-action" type="button" data-edit-${type}="${safeId}">编辑</button><button class="inline-action danger" type="button" data-delete-${type}="${safeId}">删除</button></span>`;
+      }
+
+      function renderPersonRows (derived) {
+        return derived.persons.map((person) => `<tr><td><strong>${escapeHtml(person.name)}</strong><br><span class="cell-sub mono">${escapeHtml(person.email || '账号未知')}</span></td><td>${numberValue(person.commitCount)}</td><td><span class="diff-add">+${numberValue(person.addedLines)}</span> / <span class="diff-del">-${numberValue(person.deletedLines)}</span><br><span class="cell-sub">有效文件 ${numberValue(person.effectiveFileCount)} 个</span></td><td>${escapeHtml(person.codeTotalRatio)}</td><td>${escapeHtml(person.aiCodingRate)}<br><span class="cell-sub">置信程度 ${escapeHtml(person.aiConfidence || '低')}｜分析 ${numberValue(person.analyzedChangedLines)} 行</span></td></tr>`).join('') || '<tr class="empty-row"><td colspan="5">暂无人员数据</td></tr>';
+      }
+
+      function renderIssueRows (derived) {
+        return derived.issues.map((issue) => {
+          const person = personById(issue.personId);
+          const meta = SEVERITY_META[issue.severity] || SEVERITY_META.info;
+          return `<tr><td><strong>${escapeHtml(issue.id)}</strong></td><td><span class="badge ${meta.className}">${meta.label}</span></td><td>${numberValue(issue.deduction)}</td><td>${escapeHtml(person.name)}</td><td class="mono">${escapeHtml(issue.commit)}</td><td class="mono issue-location-cell">${escapeHtml(issue.location)}</td><td>${issue.mustFix ? '是' : '否'}</td><td class="issue-summary-cell">${escapeHtml(issue.summary)}</td><td class="issue-actions-cell">${inlineActions('issue', issue.id)}</td></tr>`;
+        }).join('') || '<tr class="empty-row"><td colspan="9">暂无已确认问题</td></tr>';
+      }
+
+      function renderIssueDetails (derived) {
+        return derived.issues.map((issue) => {
+          const meta = SEVERITY_META[issue.severity] || SEVERITY_META.info;
+          const locations = Array.isArray(issue.locations) && issue.locations.length ? issue.locations.join('；') : issue.location;
+          const dimension = issue.scoringDimension || issue.dimension || '未提供';
+          return `<details class="issue-detail" open><summary><span>${escapeHtml(issue.id)} · ${escapeHtml(issue.summary)}</span> <span class="badge ${meta.className}">${meta.label} · 扣 ${numberValue(issue.deduction)} 分</span></summary><div class="issue-location"><strong>码表 / 根因：</strong>${escapeHtml(issue.id)} / ${escapeHtml(issue.rootCauseKey || '未提供')}<br><strong>级别 / 评分维度：</strong>${meta.label} / ${escapeHtml(dimension)}<br><strong>原始扣分：</strong>${numberValue(issue.deduction)} 分<br><strong>命中位置：</strong>${escapeHtml(locations)}<br><strong>归一前命中：</strong>${numberValue(issue.mergedFrom || 1)} 次<br><strong>人员 / 提交 / 模块：</strong>${escapeHtml(personById(issue.personId).name)} / ${escapeHtml(issue.commit)} / ${escapeHtml(issue.module)}</div><div class="issue-summary"><strong>影响：</strong>${escapeHtml(issue.impact)}</div><div class="fix-tip"><strong>修复建议：</strong>${escapeHtml(issue.fixHint)}<br><strong>复审方式：</strong>${escapeHtml(issue.recheck)}</div><pre class="code-block"><code>${escapeHtml(issue.code)}</code></pre></details>`;
+        }).join('') || '<div class="empty-state">暂无已确认问题详情。</div>';
+      }
+
+      function renderPersonStats (derived) {
+        return derived.persons.map((person) => `<tr><td>${escapeHtml(person.name)}</td><td>${numberValue(person.commitCount)}</td><td>${person.issueCount}</td><td>${person.mustFixCount}</td><td>${person.includedDeduction}</td><td><strong>${person.score}</strong></td></tr>`).join('') || '<tr class="empty-row"><td colspan="6">暂无人员问题统计</td></tr>';
+      }
+
+      function renderModuleStats (derived) {
+        const groups = {};
+        derived.persons.forEach((person) => person.issues.forEach((issue) => {
+          const key = `${person.id}::${issue.module || '未分类'}`;
+          if (!groups[key]) groups[key] = { person: person.name, module: issue.module || '未分类', count: 0, mustFix: 0, deduction: 0 };
+          groups[key].count += 1;
+          groups[key].mustFix += issue.mustFix ? 1 : 0;
+          groups[key].deduction += numberValue(person.includedById[issue.id]);
+        }));
+        return Object.values(groups).map((group) => `<tr><td>${escapeHtml(group.person)}</td><td>${escapeHtml(group.module)}</td><td>${group.count}</td><td>${group.mustFix}</td><td>${round(group.deduction)}</td></tr>`).join('') || '<tr class="empty-row"><td colspan="5">暂无模块统计</td></tr>';
+      }
+
+      function renderSeverityStats (derived) {
+        return SEVERITY_ORDER.map((severity) => {
+          const issues = derived.issues.filter((issue) => issue.severity === severity);
+          const deduction = derived.persons.reduce((sum, person) => sum + issues.reduce((inner, issue) => inner + numberValue(person.includedById[issue.id]), 0), 0);
+          return `<tr><td><span class="badge ${SEVERITY_META[severity].className}">${SEVERITY_META[severity].label}</span></td><td>${issues.length}</td><td>${issues.filter((issue) => issue.mustFix).length}</td><td>${round(deduction)}</td></tr>`;
+        }).join('');
+      }
+
+      function getScoreBandClass (derived) {
+        if (derived.status === 'high-risk') return 'score-high-risk';
+        if (derived.score >= 90) return 'score-excellent';
+        if (derived.score >= 75) return 'score-good';
+        if (derived.score >= 60) return 'score-warning';
+        return 'score-fail';
+      }
+
+      function buildTokens (derived) {
+        const summary = data.summary;
+        const scoreBandClass = getScoreBandClass(derived);
+        const statusClass = `status-${derived.status}`;
+        const mustFixItems = derived.issues.filter((issue) => issue.mustFix).map((issue) => `${issue.id}：${issue.summary}`).join('；') || '无';
+        const suggestionItems = derived.issues.filter((issue) => !issue.mustFix && issue.severity !== 'info').map((issue) => `${issue.id}：${issue.fixHint}`).join('；') || '无';
+        const blockReason = derived.status === 'high-risk' ? '存在阻断或严重问题，风险分按规则封顶。' : '无';
+        return {
+          reportStatusClass: statusClass,
+          scoreBandClass,
+          reportTitle: summary.reportTitle,
+          reviewResult: derived.gateResult,
+          reviewScope: summary.reviewScope,
+          reviewTarget: summary.reviewTarget,
+          reviewType: summary.reviewType,
+          generatedAt: summary.generatedAt,
+          reviewer: summary.reviewer,
+          reviewConclusion: summary.reviewConclusion,
+          scoreFormula: SCORE_FORMULA_HINT,
+          score: derived.score,
+          issueCount: derived.issues.length,
+          mustFixCount: derived.issues.filter((issue) => issue.mustFix).length,
+          commitCount: derived.commitCount,
+          authorCount: derived.persons.length,
+          aiCodingRate: derived.aiCodingRate,
+          branchInfo: summary.branchInfo,
+          commitRange: summary.commitRange,
+          timeRange: summary.timeRange,
+          reviewAuthors: summary.reviewAuthors,
+          reviewDirectories: summary.reviewDirectories,
+          reviewBasis: summary.reviewBasis,
+          codingRateBasis: summary.codingRateBasis,
+          personCommitRowsHtml: renderPersonRows(derived),
+          issueRowsHtml: renderIssueRows(derived),
+          issueDetailsHtml: renderIssueDetails(derived),
+          personStatsRowsHtml: renderPersonStats(derived),
+          moduleStatsRowsHtml: renderModuleStats(derived),
+          severityStatsRowsHtml: renderSeverityStats(derived),
+          gateClass: derived.status === 'high-risk' ? 'badge-high-risk' : derived.status === 'fail' ? 'badge-fail' : derived.status === 'change' ? 'badge-major' : 'badge-pass',
+          gateResult: derived.gateResult,
+          blockReason,
+          mustFixItems,
+          suggestionItems,
+          recheckRequirement: derived.issues.length ? '修复或确认问题后重新生成报告，并核对概览分数、人员统计和 reviewDataJson。' : '无需复审。'
+        };
+      }
+
+      // 保存后的报告会把当前可见文本固化到 HTML；这里按隐藏 JSON 再同步一次，确保重新打开后仍可继续编辑。
+      function syncScalarFields (derived) {
+        const summary = data.summary;
+        const reportTitle = `${summary.reportTitle || '代码审查'} - ${derived.gateResult}`;
+        document.title = `${summary.reportTitle || '代码审查报告'} - ${derived.gateResult}`;
+        document.getElementById('reportHeaderTitle').textContent = `后端代码审查报告 - ${reportTitle}`;
+        document.getElementById('reportHeaderMeta').innerHTML = `审查范围：${escapeHtml(summary.reviewScope)}<br>审查对象：${escapeHtml(summary.reviewTarget)}<br>审查类型：${escapeHtml(summary.reviewType)} ｜ 生成时间：${escapeHtml(summary.generatedAt)} ｜ 审查人：${escapeHtml(summary.reviewer)}<br>结论：${escapeHtml(summary.reviewConclusion)}`;
+        document.getElementById('scoreValue').textContent = derived.score;
+        document.getElementById('issueCountValue').textContent = derived.issues.length;
+        document.getElementById('mustFixCountValue').textContent = derived.issues.filter((issue) => issue.mustFix).length;
+        document.getElementById('commitCountValue').textContent = derived.commitCount;
+        document.getElementById('authorCountValue').textContent = derived.persons.length;
+        document.getElementById('aiCodingRateValue').textContent = derived.aiCodingRate;
+        document.getElementById('branchInfoValue').textContent = summary.branchInfo || summary.branch || '未提供';
+        document.getElementById('commitRangeValue').textContent = summary.commitRange || '未提供';
+        document.getElementById('timeRangeValue').textContent = summary.timeRange || '未提供';
+        document.getElementById('reviewAuthorsValue').textContent = summary.reviewAuthors || '无';
+        document.getElementById('reviewDirectoriesValue').textContent = summary.reviewDirectories || '未提供';
+        document.getElementById('reviewBasisValue').textContent = summary.reviewBasis || '未提供';
+        document.getElementById('codingRateBasisValue').textContent = summary.codingRateBasis || '未提供';
+        document.querySelector('.title').className = `title ${getScoreBandClass(derived)}`;
+        const gate = document.getElementById('gateResultValue');
+        gate.className = `badge ${derived.status === 'high-risk' ? 'badge-high-risk' : derived.status === 'fail' ? 'badge-fail' : derived.status === 'change' ? 'badge-major' : 'badge-pass'}`;
+        gate.textContent = derived.gateResult;
+        document.getElementById('blockReasonValue').textContent = derived.status === 'high-risk' ? '存在阻断或严重问题，风险分按规则封顶。' : '无';
+        document.getElementById('mustFixItemsValue').textContent = derived.issues.filter((issue) => issue.mustFix).map((issue) => `${issue.id}：${issue.summary}`).join('；') || '无';
+        document.getElementById('suggestionItemsValue').textContent = derived.issues.filter((issue) => !issue.mustFix && issue.severity !== 'info').map((issue) => `${issue.id}：${issue.fixHint}`).join('；') || '无';
+        document.getElementById('recheckRequirementValue').textContent = derived.issues.length ? '修复或确认问题后重新生成报告，并核对概览分数、人员统计和 reviewDataJson。' : '无需复审。';
+      }
+
+      function render () {
+        const derived = syncDerivedFields(calculateReport());
+        document.body.className = `status-${derived.status}`;
+        wrap.innerHTML = fillTemplate(buildTokens(derived));
+        const hasPendingChange = history.length > 0;
+        document.getElementById('undoButton').disabled = !hasPendingChange;
+        document.getElementById('saveButton').disabled = !hasPendingChange;
+        document.getElementById('personCommitRows').innerHTML = renderPersonRows(derived);
+        document.getElementById('issueRows').innerHTML = renderIssueRows(derived);
+        document.getElementById('issueDetails').innerHTML = renderIssueDetails(derived);
+        document.getElementById('personStatsRows').innerHTML = renderPersonStats(derived);
+        document.getElementById('moduleStatsRows').innerHTML = renderModuleStats(derived);
+        document.getElementById('severityStatsRows').innerHTML = renderSeverityStats(derived);
+        syncScalarFields(derived);
+        dataNode.textContent = getSerializedJson();
+      }
+
+      function recordHistory () {
+        history.push(cloneData(data));
+        if (history.length > 20) history.shift();
+      }
+
+      function commitChange (mutator, message) {
+        recordHistory();
+        mutator();
+        render();
+        showToast(message);
+      }
+
+      function validateData (value) {
+        if (!value || typeof value !== 'object') throw new Error('顶层必须是对象');
+        if (!value.summary || typeof value.summary !== 'object') throw new Error('缺少 summary 对象');
+        if (value.summary.codeType !== 'backend') throw new Error('summary.codeType 必须固定为 backend');
+        if (!Array.isArray(value.persons)) throw new Error('persons 必须是数组');
+        if (!Array.isArray(value.issues)) throw new Error('issues 必须是数组');
+        value.persons.forEach((person, index) => {
+          if (!person.id || !person.name) throw new Error(`第 ${index + 1} 个人员缺少 id 或 name`);
+          if (!Array.isArray(person.issues)) throw new Error(`第 ${index + 1} 个人员的 issues 必须是数组`);
+        });
+        value.issues.forEach((issue, index) => { if (!issue.id || !SEVERITY_META[issue.severity]) throw new Error(`第 ${index + 1} 个问题的 id 或级别无效`); });
+        return true;
+      }
+
+      function openModal (title, html) {
+        modalReturnFocus = document.activeElement;
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalBody').innerHTML = html;
+        document.getElementById('editorModal').classList.add('is-open');
+        document.body.classList.add('modal-open');
+        const firstControl = document.querySelector('#modalBody input:not([readonly]), #modalBody select, #modalBody textarea:not([readonly]), #modalBody button');
+        if (firstControl) firstControl.focus();
+      }
+
+      function closeModal () {
+        document.getElementById('editorModal').classList.remove('is-open');
+        document.getElementById('modalBody').innerHTML = '';
+        document.body.classList.remove('modal-open');
+        if (modalReturnFocus && modalReturnFocus.isConnected) modalReturnFocus.focus();
+        modalReturnFocus = null;
+      }
+
+      function field (label, name, value, type, full) {
+        const input = type === 'textarea' ? `<textarea name="${name}">${escapeHtml(value)}</textarea>` : `<input name="${name}" type="${type || 'text'}" value="${escapeHtml(value)}">`;
+        return `<div class="modal-field${full ? ' full' : ''}"><label>${label}</label>${input}</div>`;
+      }
+
+      // 审查证据字段只允许查看和复制，避免编辑报告时篡改问题来源与定位信息。
+      function lockedField (label, value, type, full) {
+        const input = type === 'textarea' ? `<textarea readonly>${escapeHtml(value)}</textarea>` : `<input type="text" value="${escapeHtml(value)}" readonly>`;
+        return `<div class="modal-field${full ? ' full' : ''}"><label>${label}<span class="field-hint">不可修改</span></label>${input}</div>`;
+      }
+
+      function issueForm (issue) {
+        const severityOptions = SEVERITY_ORDER.map((severity) => `<option value="${severity}" ${issue.severity === severity ? 'selected' : ''}>${SEVERITY_META[severity].label}</option>`).join('');
+        return `<form id="issueForm"><div class="modal-intro"><strong>${escapeHtml(issue.id)} · ${escapeHtml(SEVERITY_META[issue.severity].label)}问题</strong><span>${escapeHtml(issue.summary)}</span></div><div class="modal-grid">${lockedField('问题编号', issue.id)}<div class="modal-field"><label>级别 <span class="field-hint">选择后自动填充默认扣分</span></label><select name="severity">${severityOptions}</select></div>${field('扣分 <span class="field-hint">可按实际影响微调</span>', 'deduction', issue.deduction, 'number')}${lockedField('提交', issue.commit)}${lockedField('代码位置', issue.location, 'text', true)}${lockedField('责任人员', personById(issue.personId).name)}${lockedField('模块 / 目录', issue.module)}${field('问题摘要', 'summary', issue.summary, 'textarea', true)}${field('影响说明', 'impact', issue.impact, 'textarea', true)}${field('修复建议', 'fixHint', issue.fixHint, 'textarea', true)}${field('复审方式', 'recheck', issue.recheck, 'textarea', true)}${lockedField('脱敏代码片段', issue.code, 'textarea', true)}<div class="modal-field full checkbox-field"><label class="checkbox-control"><input name="mustFix" type="checkbox" ${issue.mustFix ? 'checked' : ''}><span>必须修复</span></label></div></div><div class="modal-actions"><button class="modal-button" type="button" data-cancel-modal="true">取消</button><button class="modal-button primary" type="submit">保存问题修改</button></div></form>`;
+      }
+
+      function handleModalSubmit (event) {
+        event.preventDefault();
+        const form = event.target;
+        const formData = new FormData(form);
+        const formId = form.getAttribute('id');
+        if (formId === 'issueForm') {
+          const id = form.dataset.id;
+          const next = Object.fromEntries(formData.entries());
+          next.deduction = numberValue(next.deduction);
+          next.mustFix = formData.get('mustFix') === 'on';
+          commitChange(() => { const issue = data.issues.find((item) => item.id === id); Object.assign(issue, next, { id }); }, '问题数据已更新，评分已重新计算。');
+          closeModal();
+        }
+      }
+
+      function getSerializedJson () {
+        const derived = syncDerivedFields(calculateReport());
+        return JSON.stringify(data, null, 2);
+      }
+
+      function buildHtml () {
+        const serializedJson = getSerializedJson().replace(/<\/(script)/gi, '<\\/$1');
+        return document.documentElement.outerHTML.replace(/(<script id="reviewDataJson" type="application\/json" hidden(?:="")?>)[\s\S]*?(<\/script>)/i, `$1\n${serializedJson}\n$2`);
+      }
+
+      // 保存时沿用当前页面的文件名，避免编辑报告后被另存为无关的临时名称。
+      function getOriginalFileName () {
+        const pathName = window.location.pathname || '';
+        const pathFileName = pathName.split('/').pop() || '';
+        try {
+          const decodedFileName = decodeURIComponent(pathFileName);
+          return /\.html?$/i.test(decodedFileName) ? decodedFileName : 'backend-code-review-report.html';
+        } catch (error) {
+          return /\.html?$/i.test(pathFileName) ? pathFileName : 'backend-code-review-report.html';
+        }
+      }
+
+      function saveHtml () {
+        const blob = new Blob([`<!DOCTYPE html>\n${buildHtml()}`], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = getOriginalFileName();
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast('已保存包含最新 JSON 的报告文件。');
+      }
+
+      function showToast (message, isError) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.style.borderColor = isError ? '#fecaca' : '#bbf7d0';
+        toast.style.color = isError ? '#b91c1c' : '#166534';
+        toast.style.background = isError ? '#fef2f2' : '#f0fdf4';
+        toast.classList.add('is-visible');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 3200);
+      }
+
+      function confirmDelete (message) {
+        return window.confirm(`${message}\n\n删除会立即影响评分，可使用问题清单下方“撤销”恢复。`);
+      }
+
+      // 级别变更时回填区间下限，用户仍可在回填后按实际影响手工微调扣分。
+      document.addEventListener('change', (event) => {
+        const severitySelect = event.target.closest('#issueForm select[name="severity"]');
+        if (!severitySelect) return;
+        const deductionInput = document.querySelector('#issueForm input[name="deduction"]');
+        const severity = SEVERITY_META[severitySelect.value];
+        if (deductionInput && severity) deductionInput.value = severity.defaultDeduction;
+      });
+
+      // 记录按下位置，避免在弹窗内按下后拖到遮罩层松开时误触发关闭。
+      document.addEventListener('pointerdown', (event) => {
+        modalPointerDownInside = Boolean(event.target.closest('#editorModal .modal'));
+      });
+
+      document.addEventListener('click', (event) => {
+        const submitButton = event.target.closest('button[type="submit"]');
+        if (submitButton && submitButton.form) {
+          // 某些本地文件浏览器不会把动态表单的 submit 事件交给委托节点，点击时直接复用同一提交逻辑。
+          event.preventDefault();
+          handleModalSubmit({ preventDefault: () => {}, target: submitButton.form });
+          return;
+        }
+        const undoButton = event.target.closest('#undoButton');
+        const saveButton = event.target.closest('#saveButton');
+        const editIssueButton = event.target.closest('[data-edit-issue]');
+        const deleteIssueButton = event.target.closest('[data-delete-issue]');
+        if (undoButton) {
+          if (!history.length) return showToast('没有可撤销的修改。', true);
+          data = history.pop();
+          render();
+          showToast('已撤销最近一次修改。');
+        }
+        if (saveButton) saveHtml();
+        if (editIssueButton) {
+          const issue = data.issues.find((item) => item.id === editIssueButton.dataset.editIssue);
+          if (issue) { openModal(`编辑问题：${issue.id}`, issueForm(issue)); document.getElementById('issueForm').dataset.id = issue.id; }
+        }
+        if (deleteIssueButton) {
+          const id = deleteIssueButton.dataset.deleteIssue;
+          const issue = data.issues.find((item) => item.id === id);
+          if (issue && confirmDelete(`确认删除问题“${issue.id}”？`)) commitChange(() => { data.issues = data.issues.filter((item) => item.id !== id); }, '问题已删除，评分已重新计算。');
+        }
+        const shouldCloseBackdrop = event.target.id === 'editorModal' && !modalPointerDownInside;
+        modalPointerDownInside = false;
+        if (event.target.closest('[data-cancel-modal]') || event.target.id === 'closeModalButton' || shouldCloseBackdrop) closeModal();
+      });
+
+      // 使用文档级委托，确保弹窗内容重绘后，动态表单仍能提交。
+      document.addEventListener('submit', handleModalSubmit);
+      document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeModal(); });
+      render();
+    }());
+  </script>
+</body></html>
+
+
